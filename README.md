@@ -2,7 +2,7 @@
 
 Se explica brevemente en que consiste este repositorio del proyecto de consulta de reglamentos académicos y disciplinarios implementado mediante RAG (Generación Aumentada por Recuperación) local.
 
-**Nota**: Este proyecto fue hecho con apoyo de la inteligencia artificial Claude a fin de acelerar el desarrollo de este ya que meramente sirve como demostración para crear un sistema de chat con un consultor inteligente mediante un LLM local. Aún así, sirve muy bien como base. Y de antemano aviso, el archivo `tools.py` no tiene uso real en este proyecto, pero se deja allí y se justifica en la documentación
+*Nota: Este proyecto fue hecho con apoyo de la inteligencia artificial Claude a fin de acelerar el desarrollo de este ya que meramente sirve como demostración para crear un sistema de chat con un consultor inteligente mediante un LLM local. Aún así, sirve muy bien como base. Y de antemano aviso, el archivo `tools.py` no tiene uso real en este proyecto, pero se deja allí y se justifica en la documentación*
 
 ---
 
@@ -38,5 +38,6 @@ Se toma este enfoque porque la forma convencional suele fallar o confundirse al 
   -  `docker compose up -d # Docker`
   -  `podman compose up -d # Podman`
 2. Levante el servidor de ollama: `ollama serve` 
+3. Ejecute `pip install -r requirements.txt` (recomendaría ejecutarlo en un entorno virtual de python con este comando: `python -m venv venv && source venv/bin/activate`) 
 3. Ejecute `python -m src.ingest` y espere a que termine de procesar los datos
 4. Ejecute `python -m src.chat`.

@@ -12,13 +12,54 @@ from src.db import (
     register_document,
     insert_chunk,
     delete_chunks_of_document,
+    delete_structure_of_document,
+    insert_structure_entries,
 )
 
 HEADER_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$", re.MULTILINE)
-
 ARTICLE_PATTERN = re.compile(r"^\s*(Art[ií]culo\s+\d+[o°]?\.?)", re.MULTILINE | re.IGNORECASE)
-
 MAX_CHUNK_CHARS = 1500
+
+STRUCTURE_PATTERNS = {
+    "articulo": re.compile(r"Art[ií]culo\s+(\d+)", re.IGNORECASE),
+    "capitulo": re.compile(r"Cap[ií]tulo\s+([IVXLCDM]+|\d+)", re.IGNORECASE),
+    "seccion": re.compile(r"Secci[oó]n\s+(\d+)", re.IGNORECASE),
+    "anexo": re.compile(r"Anexo\s+([IVXLCDM]+|\d+)", re.IGNORECASE),
+}
+
+_ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+
+
+def _roman_to_int(text: str) -> int | None:
+    text = text.upper()
+    if not text or any(ch not in _ROMAN_VALUES for ch in text):
+        return None
+    total, prev = 0, 0
+    for ch in reversed(text):
+        value = _ROMAN_VALUES[ch]
+        total += -value if value < prev else value
+        prev = max(prev, value)
+    return total
+
+
+def _normalize_entity_number(raw: str) -> int | None:
+    return int(raw) if raw.isdigit() else _roman_to_int(raw)
+
+
+def extract_document_structure(markdown_text: str) -> list[tuple[str, int, str]]:
+    seen = set()
+    entries = []
+    for entity_type, pattern in STRUCTURE_PATTERNS.items():
+        for match in pattern.finditer(markdown_text):
+            number = _normalize_entity_number(match.group(1))
+            if number is None:
+                continue
+            key = (entity_type, number)
+            if key in seen:
+                continue
+            seen.add(key)
+            entries.append((entity_type, number, match.group(0).strip()))
+    return entries
 
 
 def file_hash(path) -> str:
@@ -38,7 +79,6 @@ def convert_to_markdown(pdf_path) -> str:
 
 
 def _split_by_pattern(text: str, pattern: re.Pattern, title_from_match: bool) -> list[tuple[str, str]]:
-    """Corta 'text' en los puntos donde matchea 'pattern'. Cada match arranca una sección nueva."""
     matches = list(pattern.finditer(text))
     sections = []
     for i, match in enumerate(matches):
@@ -52,7 +92,6 @@ def _split_by_pattern(text: str, pattern: re.Pattern, title_from_match: bool) ->
 
 
 def _split_by_paragraphs(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[tuple[str, str]]:
-    """Último recurso: agrupa párrafos consecutivos hasta un límite de tamaño por chunk."""
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     sections = []
     buffer = ""
@@ -76,23 +115,19 @@ def _extract_article_number(title: str) -> int | None:
 
 
 def split_by_sections(markdown_text: str) -> list[tuple[str, str, int | None]]:
-    """
-    Devuelve lista de (titulo_seccion, contenido, numero_articulo), probando en cascada:
-    1) Encabezados Markdown reales (#, ##, ...)
-    2) Patrón 'Artículo N.' (común en reglamentos convertidos a texto plano) -> guarda el número
-    3) Párrafos agrupados por tamaño máximo (fallback genérico)
-    Evita que un documento sin encabezados termine como un único chunk gigante.
-    """
     if not markdown_text.strip():
         return []
+
     header_matches = list(HEADER_PATTERN.finditer(markdown_text))
     if len(header_matches) >= 2:
         sections = _split_by_pattern(markdown_text, HEADER_PATTERN, title_from_match=False)
         return [(title, content, None) for title, content in sections]
+
     article_matches = list(ARTICLE_PATTERN.finditer(markdown_text))
     if len(article_matches) >= 2:
         sections = _split_by_pattern(markdown_text, ARTICLE_PATTERN, title_from_match=True)
         return [(title, content, _extract_article_number(title)) for title, content in sections]
+
     sections = _split_by_paragraphs(markdown_text)
     return [(title, content, None) for title, content in sections]
 
@@ -105,6 +140,7 @@ def embed_text(text: str) -> list[float]:
 def ingest_document(pdf_path, force: bool = False):
     filename = pdf_path.name
     h = file_hash(pdf_path)
+
     conn = get_connection()
     try:
         if not force and document_already_processed(conn, filename, h):
@@ -113,14 +149,18 @@ def ingest_document(pdf_path, force: bool = False):
         print(f"[PROCESANDO] {filename}")
         markdown_text = convert_to_markdown(pdf_path)
         sections = split_by_sections(markdown_text)
-        # Si el documento existía con otro hash (cambió), se limpian sus chunks previos
+        structure_entries = extract_document_structure(markdown_text)
+        # Si el documento existía con otro hash (cambió), se limpia todo antes de re-insertar
         delete_chunks_of_document(conn, filename)
+        delete_structure_of_document(conn, filename)
         register_document(conn, filename, h)
         for idx, (title, content, article_number) in enumerate(sections):
             embedding = embed_text(content)
             insert_chunk(conn, filename, idx, title, content, embedding, article_number=article_number)
+        insert_structure_entries(conn, filename, structure_entries)
         conn.commit()
-        print(f"[OK] {filename}: {len(sections)} secciones vectorizadas e insertadas.")
+        print(f"[OK] {filename}: {len(sections)} secciones vectorizadas, "
+              f"{len(structure_entries)} entradas estructurales indexadas.")
     except Exception:
         conn.rollback()
         raise

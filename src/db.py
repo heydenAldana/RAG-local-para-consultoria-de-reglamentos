@@ -72,9 +72,9 @@ def search_similar_chunks(conn: psycopg.Connection, query_embedding: list[float]
         return cur.fetchall()
 
 
-"""Búsqueda EXACTA (no semántica) por número de artículo."""
 def get_chunks_by_article_number(conn: psycopg.Connection, article_number: int,
                                   document_filter: str | None = None):
+    """Búsqueda EXACTA (no semántica) por número de artículo. Evita confundir art. 5 con art. 35."""
     with conn.cursor() as cur:
         if document_filter:
             cur.execute(
@@ -100,7 +100,6 @@ def get_chunks_by_article_number(conn: psycopg.Connection, article_number: int,
 
 
 def get_document_stats(conn: psycopg.Connection):
-    """Cantidad de artículos identificados por documento (para preguntas de conteo/agregación)."""
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -111,4 +110,51 @@ def get_document_stats(conn: psycopg.Connection):
             ORDER BY document_filename
             """
         )
+        return cur.fetchall()
+
+
+def delete_structure_of_document(conn: psycopg.Connection, filename: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM document_structure WHERE document_filename = %s", (filename,))
+
+
+def insert_structure_entries(conn: psycopg.Connection, filename: str,
+                              entries: list[tuple[str, int, str]]) -> None:
+    if not entries:
+        return
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO document_structure (document_filename, entity_type, entity_number, entity_label)
+            VALUES (%s, %s, %s, %s)
+            """,
+            [(filename, entity_type, number, label) for entity_type, number, label in entries],
+        )
+
+
+def get_structure_stats(conn: psycopg.Connection, entity_type: str,
+                         document_filter: str | None = None):
+    with conn.cursor() as cur:
+        if document_filter:
+            cur.execute(
+                """
+                SELECT document_filename, COUNT(DISTINCT entity_number), MAX(entity_number)
+                FROM document_structure
+                WHERE entity_type = %s AND document_filename ILIKE %s
+                GROUP BY document_filename
+                ORDER BY document_filename
+                """,
+                (entity_type, document_filter),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT document_filename, COUNT(DISTINCT entity_number), MAX(entity_number)
+                FROM document_structure
+                WHERE entity_type = %s
+                GROUP BY document_filename
+                ORDER BY document_filename
+                """,
+                (entity_type,),
+            )
         return cur.fetchall()

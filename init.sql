@@ -30,3 +30,14 @@ ALTER TABLE chunks ADD COLUMN IF NOT EXISTS article_number INTEGER;
 
 CREATE INDEX IF NOT EXISTS chunks_article_number_idx
     ON chunks (document_filename, article_number);
+
+CREATE TABLE IF NOT EXISTS document_structure (
+    id                  SERIAL PRIMARY KEY,
+    document_filename  TEXT NOT NULL REFERENCES documents_control(filename) ON DELETE CASCADE,
+    entity_type          TEXT NOT NULL,
+    entity_number        INTEGER NOT NULL,
+    entity_label          TEXT
+);
+
+CREATE INDEX IF NOT EXISTS document_structure_idx
+    ON document_structure (document_filename, entity_type);

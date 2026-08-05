@@ -22,6 +22,14 @@ DOCUMENT_KEYWORDS = {
     "disciplina": "%disciplinario%",
     "academico": "%academico%",
     "académico": "%academico%",
+    "cargo": "%cargo%",
+    "puesto": "%puesto%",
+    "reglamento": "%reglamento%",
+    "examen": "%examen%",
+    "exámenes": "%exámenes%",
+    "ayuda": "%ayuda%",
+    "apoyo": "%apoyo%",
+    "universidad": "%universidad%"
 }
 
 
@@ -37,7 +45,7 @@ def _debug(label: str, details: str) -> None:
     print(f"\n[DEBUG] {label}: {details}", file=sys.stderr)
 
 
-def _semantic_search(query: str, document_filter: str | None, top_k: int = 5) -> str:
+def _semantic_search(query: str, document_filter: str | None, top_k: int = 10) -> str:
     embed_response = ollama.embed(model=EMBED_MODEL, input=query)
     query_embedding = embed_response["embeddings"][0]
     conn = get_connection()
@@ -48,7 +56,7 @@ def _semantic_search(query: str, document_filter: str | None, top_k: int = 5) ->
     _debug("Búsqueda semántica", f"'{query}' -> {len(results)} chunks")
     for filename, section_title, content, similarity in results:
         preview = content[:80].replace("\n", " ")
-        print(f"  - sim={similarity:.3f} | {filename} | sección: '{section_title}' | {preview}...", file=sys.stderr)
+        print(f"  - sim={similarity:.4f} | {filename} | sección: '{section_title}' | {preview}...", file=sys.stderr)
     if not results:
         return "No se encontró información relevante en la base de conocimiento."
     return "\n\n---\n\n".join(

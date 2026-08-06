@@ -10,10 +10,9 @@ Se explica brevemente en que consiste este repositorio del proyecto de consulta 
 
 ### ¿En qué consiste?
 El proyecto es un pequeño sistema de **Generación Aumentada por Recuperación (RAG)** local diseñado para responder consultas sobre reglamentos institucionales (académicos y disciplinarios). A diferencia de los enfoques RAG convencionales que dependen únicamente de la búsqueda semántica, este sistema implementa una arquitectura de recuperación híbrida que combina:
-1. **Búsqueda Semántica**: Búsqueda vectorial mediante embeddings para preguntas abiertas.
-2. **Búsqueda por Coincidencia Exacta**: Búsqueda indexada en base de datos para números de artículos específicos.
-3. **Estadísticas Agregadas**: Consultas estructuradas de SQL para preguntas de agregación o conteo.
-Se toma este enfoque porque la forma convencional suele fallar o confundirse al buscar números de artículos específicos o realizar conteos.
+1. **Búsqueda Híbrida (Vectorial + FTS)**: Lo que hace es que combina la búsqueda por significado (vectorial) con la búsqueda de palabras clave tradicional (Full-Text Search en español) mediante el algoritmo de fusión **Reciprocal Rank Fusion (RRF)** para ordenar los resultados de forma más óptima.
+2. **Búsqueda por Coincidencia Exacta**: Búsqueda indexada en base de datos para números de artículos y capítulos específicos, para dar respuestas exactas para consultas puntuales.
+3. **Estadísticas Estructurales**: Consultas estructuradas de SQL a través de un registro jerárquico de documentos para resolver de manera determinista preguntas de agregación o conteo de secciones, capítulos, artículos o anexos.
 
 ### ¿Cómo funciona?
 1. **Conversión e Ingesta**: Los archivos PDF depositados en `rawDocuments/` se analizan mediante su hash SHA256. Si fuesen modificados o son nuevos, se procesan usando la herramienta de Microsoft `MarkItDown` para convertirlos a Markdown estructurado y almacenarlos en `processedDocuments/`.
@@ -31,6 +30,13 @@ Se toma este enfoque porque la forma convencional suele fallar o confundirse al 
   - **Llama de Chat**: `qwen2.5:7b` (o el configurado en `.env` (use el modelo que desee)).
   - **Lector de Embeddings**: `nomic-embed-text` (este si es necesario, descargalo con el comando `ollama pull nomic-embed-text:latest`).
 - Microsoft MarkItDown
+
+### Requisitos
+
+- Python 3 instalado
+- Instalar Ollama en tu computadora a fin de poder descargar los modelos locales como `qwen3:4b` (`ollama pull qwen3:4b`) o `quen2.5:7b` (`ollama pull qwen2.5:7b`). Puedes usar el modelo que quieras mientras tu hardware pueda soportarlo al momento de ejecutar sin agobiarse
+- Crear un entorno virtual de python de preferencia.
+- Docker o Podman instalados
 
 ### ¿Cómo se prueba?
 

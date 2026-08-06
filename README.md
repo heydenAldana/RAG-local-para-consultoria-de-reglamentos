@@ -40,10 +40,11 @@ El proyecto es un pequeño sistema de **Generación Aumentada por Recuperación 
 
 ### ¿Cómo se prueba?
 
-1. Levante el contenedor:
+1. Crear tu archivo .env (puedes usar el mismo contenido de .env.example)
+2. Levante el contenedor:
   -  `docker compose up -d # Docker`
   -  `podman compose up -d # Podman`
-2. Levante el servidor de ollama: `ollama serve` 
-3. Ejecute `pip install -r requirements.txt` (recomendaría ejecutarlo en un entorno virtual de python con este comando: `python -m venv venv && source venv/bin/activate`) 
-3. Ejecute `python -m src.ingest` y espere a que termine de procesar los datos
-4. Ejecute `python -m src.chat`.
+3. Levante el servidor de ollama: `ollama serve` 
+4.Ejecute `pip install -r requirements.txt` (recomendaría ejecutarlo en un entorno virtual de python con este comando: `python -m venv venv && source venv/bin/activate`) 
+5. Ejecute `python -m src.ingest` y espere a que termine de procesar los datos
+6. Ejecute `python -m src.chat`.

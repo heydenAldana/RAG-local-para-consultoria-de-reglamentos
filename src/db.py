@@ -89,7 +89,7 @@ def search_similar_chunks(conn: psycopg.Connection, query_embedding: list[float]
                        COALESCE(1.0 / (%(rrf_k)s + f.rank_f), 0) AS rrf_score
                 FROM vec v FULL OUTER JOIN fts f ON v.id = f.id
             )
-            SELECT c.document_filename, c.section_title, c.content, cb.rrf_score
+            SELECT c.document_filename, c.section_title, c.content, cb.rrf_score, c.article_number, c.chapter_number
             FROM combined cb
             JOIN chunks c ON c.id = cb.id
             ORDER BY cb.rrf_score DESC

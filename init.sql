@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     section_title       TEXT,
     content              TEXT NOT NULL,
     embedding             vector(768) NOT NULL,
-    article_number       INTEGER  -- NULL si la sección no corresponde a un "Artículo N." explícito
+    article_number       INTEGER,
+    chapter_number       INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx
@@ -30,6 +31,17 @@ ALTER TABLE chunks ADD COLUMN IF NOT EXISTS article_number INTEGER;
 
 CREATE INDEX IF NOT EXISTS chunks_article_number_idx
     ON chunks (document_filename, article_number);
+
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS chapter_number INTEGER;
+
+CREATE INDEX IF NOT EXISTS chunks_chapter_number_idx
+    ON chunks (document_filename, chapter_number);
+
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS content_fts tsvector
+    GENERATED ALWAYS AS (to_tsvector('spanish', content)) STORED;
+
+CREATE INDEX IF NOT EXISTS chunks_content_fts_idx
+    ON chunks USING gin (content_fts);
 
 CREATE TABLE IF NOT EXISTS document_structure (
     id                  SERIAL PRIMARY KEY,

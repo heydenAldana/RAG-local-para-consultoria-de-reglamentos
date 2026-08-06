@@ -114,22 +114,36 @@ def _extract_article_number(title: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def split_by_sections(markdown_text: str) -> list[tuple[str, str, int | None]]:
+CHAPTER_PATTERN = re.compile(r"Cap[ií]tulo\s+([IVXLCDM]+|\d+)", re.IGNORECASE)
+
+
+def _extract_chapter_number(text: str) -> int | None:
+    match = CHAPTER_PATTERN.search(text)
+    if not match:
+        return None
+    return _normalize_entity_number(match.group(1))
+
+
+def split_by_sections(markdown_text: str) -> list[tuple[str, str, int | None, int | None]]:
     if not markdown_text.strip():
         return []
 
     header_matches = list(HEADER_PATTERN.finditer(markdown_text))
     if len(header_matches) >= 2:
         sections = _split_by_pattern(markdown_text, HEADER_PATTERN, title_from_match=False)
-        return [(title, content, None) for title, content in sections]
+        return [(title, content, None, _extract_chapter_number(title + " " + content))
+                for title, content in sections]
 
     article_matches = list(ARTICLE_PATTERN.finditer(markdown_text))
     if len(article_matches) >= 2:
         sections = _split_by_pattern(markdown_text, ARTICLE_PATTERN, title_from_match=True)
-        return [(title, content, _extract_article_number(title)) for title, content in sections]
+        return [(title, content, _extract_article_number(title),
+                 _extract_chapter_number(title + " " + content))
+                for title, content in sections]
 
     sections = _split_by_paragraphs(markdown_text)
-    return [(title, content, None) for title, content in sections]
+    return [(title, content, None, _extract_chapter_number(content))
+            for title, content in sections]
 
 
 def embed_text(text: str) -> list[float]:
@@ -154,9 +168,10 @@ def ingest_document(pdf_path, force: bool = False):
         delete_chunks_of_document(conn, filename)
         delete_structure_of_document(conn, filename)
         register_document(conn, filename, h)
-        for idx, (title, content, article_number) in enumerate(sections):
+        for idx, (title, content, article_number, chapter_number) in enumerate(sections):
             embedding = embed_text(content)
-            insert_chunk(conn, filename, idx, title, content, embedding, article_number=article_number)
+            insert_chunk(conn, filename, idx, title, content, embedding,
+                         article_number=article_number, chapter_number=chapter_number)
         insert_structure_entries(conn, filename, structure_entries)
         conn.commit()
         print(f"[OK] {filename}: {len(sections)} secciones vectorizadas, "

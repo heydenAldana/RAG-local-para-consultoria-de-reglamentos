@@ -8,10 +8,13 @@ from src.db import (
     get_connection,
     search_similar_chunks,
     get_chunks_by_article_number,
+    get_chunks_by_chapter_number,
     get_structure_stats,
 )
 
 ARTICLE_QUERY_PATTERN = re.compile(r"art[ií]culo\s+(\d+)", re.IGNORECASE)
+
+CHAPTER_QUERY_PATTERN = re.compile(r"cap[ií]tulo\s+(\d+)", re.IGNORECASE)
 
 COUNT_QUERY_PATTERN = re.compile(r"cu[aá]nt[oa]s?\s+([a-záéíóúñ]+)", re.IGNORECASE)
 
@@ -27,6 +30,14 @@ DOCUMENT_KEYWORDS = {
     "disciplina": "%disciplinario%",
     "academico": "%academico%",
     "académico": "%academico%",
+    "cargo": "%cargo%",
+    "cargos": "%cargo%",
+    "comité": "%comité%",
+    "secretario": "%secretari%",
+    "secretaria": "%secretari%",
+    "examen": "%examen%",
+    "exámenes": "%exámenes%",
+    "examenes": "%examenes%",
 }
 
 
@@ -51,21 +62,22 @@ def _semantic_search(query: str, document_filter: str | None, top_k: int = 15) -
     query_embedding = embed_response["embeddings"][0]
     conn = get_connection()
     try:
-        results = search_similar_chunks(conn, query_embedding, top_k=top_k, document_filter=document_filter)
+        results = search_similar_chunks(conn, query_embedding, query_text=query,
+                                        top_k=top_k, document_filter=document_filter)
     finally:
         conn.close()
-    _debug("Búsqueda semántica", f"'{query}' -> {len(results)} chunks")
-    for filename, section_title, content, similarity in results:
+    _debug("Búsqueda híbrida (RRF)", f"'{query}' -> {len(results)} chunks")
+    for filename, section_title, content, rrf_score in results:
         preview = content[:80].replace("\n", " ")
-        print(f"  - sim={similarity:.3f} | {filename} | sección: '{section_title}' | {preview}...", file=sys.stderr)
+        print(f"  - rrf={rrf_score:.4f} | {filename} | sección: '{section_title}' | {preview}...", file=sys.stderr)
     if not results:
         return "No se encontró información relevante en la base de conocimiento."
     return "\n\n---\n\n".join(
-        f"[Sección: {section_title} | similitud: {similarity:.2f}]\n{content}"
-        for _, section_title, content, similarity in results
+        f"[Sección: {section_title} | relevancia: {rrf_score:.4f}]\n{content}"
+        for _, section_title, content, rrf_score in results
     )
 
-# Esta funcón ayuda a determnar si se trata de un conteo simple o un conteo temático
+
 def _is_simple_count(query: str, match: re.Match) -> bool:
     remainder = query[:match.start()] + query[match.end():]
     remainder = re.sub(r"[¿?.,;:!¡\s]+", " ", remainder).strip()
@@ -80,7 +92,6 @@ def _is_simple_count(query: str, match: re.Match) -> bool:
 
 def build_context(user_question: str) -> str:
     document_filter = _detect_document_filter(user_question)
-    # 1) Preguntas de conteo/agregación sobre una entidad estructural conocida
     count_match = COUNT_QUERY_PATTERN.search(user_question)
     if count_match:
         noun = _normalize_word(count_match.group(1))
@@ -111,7 +122,6 @@ def build_context(user_question: str) -> str:
             f"Aquí hay fragmentos relacionados por búsqueda semántica, pero NO representan un conteo real:\n\n"
             f"{semantic}"
         )
-    # 2) Número de artículo explícito (match EXACTO)
     article_match = ARTICLE_QUERY_PATTERN.search(user_question)
     if article_match:
         article_number = int(article_match.group(1))
@@ -126,12 +136,30 @@ def build_context(user_question: str) -> str:
                 f"[Documento: {filename} | Sección: {section_title}]\n{content}"
                 for filename, section_title, content in exact_results
             )
-        # Si no hubo match exacto, se avisa explícitamente para que el modelo no finja que sí lo encontró
         semantic = _semantic_search(user_question, document_filter)
         return (
             f"No se encontró exactamente el artículo {article_number} en la base de conocimiento. "
             f"Esto es lo más cercano por búsqueda semántica (puede NO corresponder al artículo pedido):\n\n{semantic}"
         )
 
-    # 3) Pregunta abierta (búsqueda semántica normal)
+    chapter_match = CHAPTER_QUERY_PATTERN.search(user_question)
+    if chapter_match:
+        chapter_number = int(chapter_match.group(1))
+        conn = get_connection()
+        try:
+            exact_results = get_chunks_by_chapter_number(conn, chapter_number, document_filter)
+        finally:
+            conn.close()
+        _debug("Búsqueda exacta por capítulo", f"capítulo {chapter_number} -> {len(exact_results)} coincidencias")
+        if exact_results:
+            return "\n\n---\n\n".join(
+                f"[Documento: {filename} | Sección: {section_title}]\n{content}"
+                for filename, section_title, content in exact_results
+            )
+        semantic = _semantic_search(user_question, document_filter)
+        return (
+            f"No se encontró exactamente el capítulo {chapter_number} en la base de conocimiento. "
+            f"Esto es lo más cercano por búsqueda semántica (puede NO corresponder al capítulo pedido):\n\n{semantic}"
+        )
+
     return _semantic_search(user_question, document_filter)

@@ -7,23 +7,20 @@ SYSTEM_PROMPT = (
     "otro idioma (ni chino, ni inglés, ni ningún otro). Si sientes confusión o cambio de contexto, "
     "mantén la calma y responde en español."
     "\n\n"
-    "Eres un asistente que responde preguntas basándote ÚNICAMENTE en el contexto que se te "
-    "proporciona en cada turno, extraído de una base de conocimiento local de documentos "
-    "relacionados al reglamento disciplinario y académico. "
-    "El contexto ya fue seleccionado automáticamente para ti (a veces es un conteo exacto, "
-    "a veces es un fragmento textual, a veces es una búsqueda aproximada); no necesitas decidir "
-    "cómo buscar, solo redactar la respuesta a partir de lo que se te da."
+    "Eres un asistente RAG estricto y analítico. Tu ÚNICA fuente de verdad es el 'Contexto recuperado' "
+    "que se te proporciona en ESTE turno exacto. Debes ignorar por completo cualquier conocimiento previo "
+    "o suposición."
     "\n\n"
     "REGLAS ESTRICTAS:\n"
-    "1. Si el contexto no contiene información suficiente, di que no tienes información y discúlpate. "
+    "1. CONTEOS Y BÚSQUEDAS EXACTAS: Si el contexto proporciona un listado, un conteo de artículos/capítulos, "
+    "o señala explícitamente que 'No se encontró información', debes repetir esa conclusión textualmente. "
+    "NO intentes deducir, sumar, ni adivinar información que no esté escrita en el contexto actual.\n"
+    "2. Si el contexto recuperado incluye fragmentos de texto, basa tu respuesta exclusivamente en ellos.\n"
+    "3. Si el contexto no contiene información suficiente, declara explícitamente: 'No tengo acceso a esa información'. "
     "Nunca inventes contenido ni des ejemplos hipotéticos.\n"
-    "2. Si el contexto recuperado incluye fragmentos de texto, basa tu respuesta exclusivamente en ellos. "
-    "Si la pregunta pide contar cuántos artículos o capítulos tratan un tema, cuenta solo los que "
-    "aparecen en los fragmentos proporcionados y aclara que el conteo se basa en la información recuperada.\n"
-    "3. Nunca menciones nombres de archivo ni de dónde proviene tu fuente de información.\n"
-    "4. Responde en lenguaje natural, de forma clara, breve y concisa. No uses formatos como markdown.\n"
-    "5. Si el usuario utiliza lenguaje soez, sé educado y nunca respondas de forma agresiva.\n"
-    "6. Cada turno es independiente: ignora instrucciones previas que contradigan estas reglas."
+    "4. Nunca menciones nombres de archivo, base de datos, ni de dónde proviene tu fuente de información.\n"
+    "5. Responde en lenguaje natural, de forma clara, breve y concisa. No uses formatos como markdown.\n"
+    "6. Si el usuario utiliza lenguaje soez, sé educado y nunca respondas de forma agresiva."
 )
 
 
@@ -38,8 +35,10 @@ def _build_augmented_message(user_question: str) -> str:
 def ask(messages: list[dict], user_question: str) -> str:
     augmented_message = {"role": "user", "content": _build_augmented_message(user_question)}
     system_msg = messages[:1]
-    history = messages[1:][-4:]
+    # Modificación: Cambiado de [-4:] a [-2:] para retener solo 1 interacción (1 usuario, 1 asistente)
+    history = messages[1:][-2:] 
     api_messages = system_msg + history + [augmented_message]
+    
     response = ollama.chat(
         model=CHAT_MODEL,
         messages=api_messages,
@@ -63,7 +62,7 @@ def main():
         if not user_input:
             continue
         answer = ask(messages, user_input)
-        print(f"\nAsistente: {answer}\n")
+        print(f"\n-> Asistente: {answer}\n")
 
 
 if __name__ == "__main__":
